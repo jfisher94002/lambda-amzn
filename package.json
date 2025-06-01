@@ -1,0 +1,32 @@
+{
+  "name": "lambda-amzn",
+  "version": "1.0.0",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc -w",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "deploy": "npm run build && aws lambda update-function-code --function-name amazon-stock-tracker --zip-file fileb://dist.zip",
+    "package": "npm run build && rm -rf dist.zip && cd dist && zip -r ../dist.zip .",
+    "test-local": "ts-node src/test-locally.ts"
+  },
+  "keywords": [
+    "aws",
+    "lambda",
+    "stock",
+    "amazon"
+  ],
+  "author": "",
+  "license": "ISC",
+  "description": "Lambda function to query Amazon stock price daily",
+  "dependencies": {
+    "axios": "^1.6.0",
+    "cheerio": "^1.0.0"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.130",
+    "@types/node": "^20.8.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.2.2"
+  }
+}

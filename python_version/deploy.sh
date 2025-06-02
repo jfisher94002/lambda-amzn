@@ -79,6 +79,81 @@ if [ "$DEPLOY" = "y" ]; then
         echo "Schedule set up successfully!"
     fi
     
+    echo "Do you want to set up SNS notifications for stock updates? (y/n): "
+    read SNS
+    
+    if [ "$SNS" = "y" ]; then
+        SNS_TOPIC_NAME="amazon-stock-updates"
+        
+        echo "Creating SNS topic..."
+        SNS_TOPIC_ARN=$(aws sns create-topic --name $SNS_TOPIC_NAME --region $REGION --query 'TopicArn' --output text)
+        
+        echo "Topic ARN: $SNS_TOPIC_ARN"
+        
+        echo "Please enter your email address for notifications: "
+        read EMAIL
+        
+        echo "Subscribing $EMAIL to the SNS topic..."
+        aws sns subscribe \
+            --topic-arn $SNS_TOPIC_ARN \
+            --protocol email \
+            --notification-endpoint $EMAIL \
+            --region $REGION
+            
+        # Get current environment variables
+        echo "Getting current environment variables..."
+        ENV_VARS=$(aws lambda get-function-configuration \
+            --function-name $FUNCTION_NAME \
+            --query "Environment.Variables" \
+            --output json \
+            --region $REGION 2>/dev/null || echo "{}")
+        
+        if [ "$ENV_VARS" == "{}" ]; then
+            # No existing environment variables
+            echo "Setting SNS_TOPIC_ARN environment variable for Lambda function..."
+            aws lambda update-function-configuration \
+                --function-name $FUNCTION_NAME \
+                --environment "Variables={SNS_TOPIC_ARN=$SNS_TOPIC_ARN}" \
+                --region $REGION
+        else
+            # Merge with existing environment variables
+            echo "Updating SNS_TOPIC_ARN environment variable for Lambda function..."
+            # Add SNS_TOPIC_ARN to existing variables
+            UPDATED_ENV_VARS=$(echo $ENV_VARS | jq --arg arn "$SNS_TOPIC_ARN" '. + {"SNS_TOPIC_ARN": $arn}')
+            
+            # Update the function configuration
+            aws lambda update-function-configuration \
+                --function-name $FUNCTION_NAME \
+                --environment "Variables=$UPDATED_ENV_VARS" \
+                --region $REGION
+        fi
+            
+        echo "Adding SNS publish permissions to Lambda role..."
+        # Get the role ARN from the Lambda function
+        ROLE_ARN=$(aws lambda get-function --function-name $FUNCTION_NAME --region $REGION --query 'Configuration.Role' --output text)
+        ROLE_NAME=$(echo $ROLE_ARN | awk -F/ '{print $NF}')
+        
+        # Create inline policy for the role
+        POLICY_DOCUMENT='{
+            "Version": "2012-10-17",
+            "Statement": [
+                {
+                    "Effect": "Allow",
+                    "Action": "sns:Publish",
+                    "Resource": "'$SNS_TOPIC_ARN'"
+                }
+            ]
+        }'
+        
+        aws iam put-role-policy \
+            --role-name $ROLE_NAME \
+            --policy-name LambdaSNSPublish \
+            --policy-document "$POLICY_DOCUMENT"
+            
+        echo "SNS setup completed! Please check your email to confirm the subscription."
+        echo "After confirming, you'll start receiving stock price notifications."
+    fi
+    
     echo "Deployment completed!"
 else
     echo "Deployment package created but not deployed to AWS."

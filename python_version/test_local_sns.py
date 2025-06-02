@@ -63,7 +63,8 @@ class MockSNSClient:
         return {"MessageId": "test-message-id-123456"}
 
 def main():
-    # Import the Lambda handler
+    # Import the Lambda handler and module
+    import lambda_function
     from lambda_function import lambda_handler
     
     # Create a mock SNS client
@@ -74,7 +75,6 @@ def main():
     
     try:
         # Directly patch the SNS client in the lambda_function module
-        from lambda_function import sns
         with patch.object(lambda_function, 'sns', mock_sns):
             # Execute the Lambda function
             lambda_handler(mock_event, mock_context)
